@@ -1,3 +1,5 @@
+import java.util.Arrays;
+
 
 public class Crypto {
 	
@@ -226,6 +228,38 @@ public class Crypto {
 			
 	}
 	
+	/**
+	 * @param number the value to be rounded to closest multiple of 8
+	 * @return closes multiple of 8 (eg 8, 16, 24,...)
+	 */
+	private static int nextMultipleOf8(int number) {
+		if (number%8 == 0)  // return number if it is already a multiple of 8
+			return number;
+		
+		return Math.round(number/8) * 8 + 8;
+	}
+	
+	/** Takes a character and converts it to binary with 8 bits
+	 * @param c the character to be converted to binary
+	 * @return a String with length of 8 that represents char c in binary
+	 */
+	private static String convertToBinary8Bits(char c) {
+		String bits = "";
+		int a = (int) c;  // get ascii value
+		
+		// convert to binary
+		while (a > 0) {
+			bits = a%2 + bits;
+			a /= 2;
+		}
+		
+		// pad to ensure it is 8 bits
+		while (bits.length() < 8)
+			bits = "0" + bits;
+		
+		return bits;
+	}
+	
 	/** Driver method for this program. 
 	 * @param plaintext message to be encrypted, 64 bits
 	 * @param key the key to encrypt the data, 64 bits
@@ -236,7 +270,7 @@ public class Crypto {
 		// check if plaintext and key are size 64
 		if (plaintext.length != MAX || key.length != MAX) {
 			System.err.println("Plaintext and key must be of size 64");
-			return null;
+			System.exit(1);
 		}
 		
 		// ciphertext is what will be returned, also size of 64
@@ -297,18 +331,122 @@ public class Crypto {
 		return ciphertext;
 	}
 	
-	/** Driver program to implement CBC
+	/** Driver program to implement ECB
 	 * @param plaintext the message to be encrypted
 	 * @param key the key to encrypt
 	 * @return integer array with ascii values
 	 */
-	private static int CBC(String plaintext, String key) {
+	private static int[] ECB(String plaintext, String key) {
+		if(key.length() < 8) {
+			System.err.println("Key needs to be at least 8 characters long");
+			System.exit(1);
+		}
 		
+		int[] keyArray = new int[MAX];
+		int ciphertextLength = nextMultipleOf8(plaintext.length());
+		int[] binaryCiphertext = new int[ciphertextLength*8]; // ciphertext with binary values, later to be converted
+		int[] ciphertext = new int[ciphertextLength];         // what will be returned
+		
+		// convert key String into binary and store in array
+		for (int i = 0; i < 8; i++) {
+			String bits = convertToBinary8Bits(key.charAt(i));
+			for (int j = 0; j < bits.length(); j++) {
+				keyArray[i*8+j] = bits.charAt(j) - '0';
+			}
+		}
+
+		
+		/* loop through plaintext and convert each char to 8 bits and
+		 * store all concatenated bits in binaryCiphertext
+		 */
+		for (int i = 0; i < plaintext.length(); i += 8) {
+			if (plaintext.length() - i >= 8) {  // grab the 8 chars
+				for (int j = i; j < i+8; j++) {
+					String bits = convertToBinary8Bits(plaintext.charAt(j));
+					for (int k = 0; k < bits.length(); k++) {
+						binaryCiphertext[j*8+k] = bits.charAt(k) - '0';
+					}
+				}
+			} else {  // grab whatever is left 
+				for (int j = i; j < plaintext.length(); j++) {
+					String bits = convertToBinary8Bits(plaintext.charAt(j));
+						for (int k = 0; k < bits.length(); k++) {
+							binaryCiphertext[j*8+k] = bits.charAt(k) - '0';
+						}
+				}
+			}
+		}
+
+		/* loop through binaryCipertext 64 bits at a time
+		 * call DES with those 64 bits and keyArray
+		 * convert returned array from binary to ascii integer by taking 8 elements at a time
+		 * and parsing that into its decimal value and storing it in ciphertext
+		 */
+		for (int i = 0, index = 0; i <= binaryCiphertext.length-64; i+=64) {
+			int[] temp = DES(Arrays.copyOfRange(binaryCiphertext, i, i+64), keyArray);
+			for (int j = 0; j < temp.length; ) {
+				String ascii = "";
+				int count = 0;
+				while (count++ < 8)
+					ascii += temp[j++];
+
+				ciphertext[index++] = Integer.parseInt(ascii, 2);
+			}
+		}
+		return ciphertext;
 	}
-	
+		
 
 	public static void main(String[] args) {
-
+		// check test cases to make sure algorithms work
+		
+		// check DES
+		int[] plaintext = {0, 0, 0, 0, 0, 0, 0, 1,
+						   0, 0, 1, 0, 0, 0, 1, 1, 
+						   0, 1, 0, 0, 0, 1, 0, 1, 
+						   0, 1, 1, 0, 0, 1, 1, 1,
+						   1, 0, 0, 0, 1, 0, 0, 1, 
+						   1, 0, 1, 0, 1, 0, 1, 1, 
+						   1, 1, 0, 0, 1, 1, 0, 1, 
+						   1, 1, 1, 0, 1, 1, 1, 1}; 
+		
+		int[] key = {0, 0, 0, 1, 0, 0, 1, 1,
+					 0, 0, 1, 1, 0, 1, 0, 0,
+					 0, 1, 0, 1, 0, 1, 1, 1, 
+					 0, 1, 1, 1, 1, 0, 0, 1, 
+					 1, 0, 0, 1, 1, 0, 1, 1, 
+					 1, 0, 1, 1, 1, 1, 0, 0, 
+					 1, 1, 0, 1, 1, 1, 1, 1, 
+					 1, 1, 1, 1, 0, 0, 0, 1};  
+		
+		// what should be returned
+		int[] ciphertext = {1, 0, 0, 0, 0, 1, 0, 1,
+							1, 1, 1, 0, 1, 0, 0, 0, 
+							0, 0, 0, 1, 0, 0, 1, 1, 
+							0, 1, 0, 1, 0, 1, 0, 0,
+							0, 0, 0, 0, 1, 1, 1, 1,
+							0, 0, 0, 0, 1, 0, 1, 0,
+							1, 0, 1, 1, 0, 1, 0, 0,
+							0, 0, 0, 0, 0, 1, 0, 1};
+		
+		int[] myCiphertext = DES(plaintext, key);
+		for (int i = 0; i < myCiphertext.length; i++) {
+			if (ciphertext[i] != myCiphertext[i])
+				System.out.println("Error with DES at index " + i);
+		}
+		
+		// check ECB
+		
+		// what should be returned
+		int[] ciphertextECB =  {198, 252, 213, 112, 106, 165, 23, 145,
+								29, 52, 125, 61, 85, 217, 102, 155};
+		
+		int[] myCiphertextECB = ECB("I LOVE SECURITY", "ABCDEFGH");
+		for (int i = 0; i < myCiphertextECB.length; i++) {
+			if (ciphertextECB[i] != myCiphertextECB[i])
+				System.out.println("Error with ECB at index " + i);
+		}
+		
 	}
 
 }
