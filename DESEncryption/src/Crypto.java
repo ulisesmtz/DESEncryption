@@ -1,6 +1,10 @@
 import java.util.Arrays;
 
 
+/**
+ * @author UlisesM
+ *
+ */
 public class Crypto {
 	
 	private final static int MAX = 64; // max number of bits for DES
@@ -260,6 +264,23 @@ public class Crypto {
 		return bits;
 	}
 	
+	
+	/** Takes a string of 8 characters and converts it to its ascii equivalent with 8 bits per char
+	 * @param str the String of size 8 to be converted to binary ascii
+	 * @return array of size 64 that represents str in binary
+	 */
+	private static int[] convertTo64BitArray(String str) {
+		int[] result = new int[MAX];
+		for (int i = 0; i < 8; i++) {
+			String bits = convertToBinary8Bits(str.charAt(i));
+			for (int j = 0; j < bits.length(); j++) {
+				result[i*8+j] = bits.charAt(j) - '0';
+			}
+		}
+		
+		return result;
+	}
+	
 	/** Driver method for this program. 
 	 * @param plaintext message to be encrypted, 64 bits
 	 * @param key the key to encrypt the data, 64 bits
@@ -338,7 +359,7 @@ public class Crypto {
 	 */
 	private static int[] ECB(String plaintext, String key) {
 		if(key.length() < 8) {
-			System.err.println("Key needs to be at least 8 characters long");
+			System.err.println("Key needs to be at least 8 characters long for ECB");
 			System.exit(1);
 		}
 		
@@ -348,12 +369,7 @@ public class Crypto {
 		int[] ciphertext = new int[ciphertextLength];         // what will be returned
 		
 		// convert key String into binary and store in array
-		for (int i = 0; i < 8; i++) {
-			String bits = convertToBinary8Bits(key.charAt(i));
-			for (int j = 0; j < bits.length(); j++) {
-				keyArray[i*8+j] = bits.charAt(j) - '0';
-			}
-		}
+		keyArray = convertTo64BitArray(key);
 
 		
 		/* loop through plaintext and convert each char to 8 bits and
@@ -395,7 +411,97 @@ public class Crypto {
 		}
 		return ciphertext;
 	}
+	
+	/** Driver program for CBC 
+	 * @param plaintext the message to be encrypted
+	 * @param key the key to encrypt using ECB
+	 * @param IV the initialization vector that will be xor with first 64 bit of plaintext
+	 * @return
+	 */
+	private static int[] CBC(String plaintext, String key, String IV) {
+		if (key.length() < 8 || IV.length() < 8) {
+			System.err.println("Key and IV each need to be at least 8 charcters long for CBC");
+			System.exit(1);
+		}
 		
+		int[] IVArray = new int[MAX];
+		int[] ciphertext = new int[MAX];
+		int[] finalCiphertext = new int[nextMultipleOf8(plaintext.length())];  // what will be returned
+
+		// convert IV to binary (use only first 8 characters)
+		IVArray = convertTo64BitArray(IV);
+		
+		/* loop through plaintext and convert each char to 8 bits and
+		 * store all concatenated bits in binaryCiphertext and 
+		 * xor with either IV or ciphertext depending if it is first time xor-ing
+		 */
+		for (int i = 0; i < plaintext.length(); i+=8) {
+			int[] binaryCiphertext = new int[MAX];
+			int index = 0;
+			if (plaintext.length() - i >= 8) {  // grab the 8 chars
+				for (int j = i; j < i+8; j++) {
+					String bits = convertToBinary8Bits(plaintext.charAt(j));
+					for (int k = 0; k < bits.length(); k++) {
+						binaryCiphertext[index] = bits.charAt(k) - '0';
+						if (i == 0)  // xor with IV
+							ciphertext[index] = binaryCiphertext[index] ^ IVArray[index];
+						else  // xor with ciphertext
+							ciphertext[index] = binaryCiphertext[index] ^ ciphertext[index];
+						
+						index++;
+						
+					}
+				}
+			} else {  // grab whatever is left 
+				for (int j = i; j < plaintext.length(); j++) {
+					String bits = convertToBinary8Bits(plaintext.charAt(j));
+					for (int k = 0; k < bits.length(); k++) {
+						binaryCiphertext[index] = bits.charAt(k) - '0';
+						if (i == 0)  // xor with IV
+							ciphertext[index] = binaryCiphertext[index] ^ IVArray[index];
+						else  // xor with ciphertext
+							ciphertext[index] = binaryCiphertext[index] ^ ciphertext[index];
+						
+						index++;
+					}
+				}
+			}
+			
+			/* convert ciphertext back to 8 characters from binary and store
+			 * in ciphertextString to use as argument for ECB
+			 */
+			String ciphertextString = "";
+			for (int j = 0; j < ciphertext.length; ) {
+				String ascii = "";
+				int count = 0;
+				while (count++ < 8)
+					ascii += ciphertext[j++];
+	
+				ciphertextString += (char)Integer.parseInt(ascii, 2);	
+	
+			}
+		
+			int[] temp = ECB(ciphertextString, key); 
+			
+			// add result from ECB (temp array) to corresponding location in finalCipertext
+			for (int j = 0; j < temp.length; j++) {
+				finalCiphertext[j+i] = temp[j];
+			}
+			
+			// convert each char from temp to 8 digit binary and store in ciphertext
+			for (int j = 0, k = 0; j < ciphertext.length; ) {
+				String s = convertToBinary8Bits( (char)temp[k++] );
+				for (int l = 0; l < s.length(); l++) {
+					ciphertext[j++] = s.charAt(l) - '0';
+				}
+			}
+			
+
+		}
+
+		return finalCiphertext;
+	}
+	
 
 	public static void main(String[] args) {
 		// check test cases to make sure algorithms work
@@ -446,7 +552,19 @@ public class Crypto {
 			if (ciphertextECB[i] != myCiphertextECB[i])
 				System.out.println("Error with ECB at index " + i);
 		}
+
+		// check CBC
 		
+		// what should be returned
+		int[] ciphertextCBC = {63, 69, 76, 252, 154, 205, 193, 162,
+							   46, 88, 102, 161, 151, 14, 56, 97};
+		
+		int[] myCiphertextCBC = CBC("I LOVE SECURITY", "ABCDEFGH", "ABCDEFGH");
+		for (int i = 0; i < myCiphertextCBC.length; i++) {
+			if (ciphertextCBC[i] != myCiphertextCBC[i])
+				System.out.println(i + " Expected:" + ciphertextCBC[i] + " Got: " + myCiphertextCBC[i]);
+		}
+				
 	}
 
 }
