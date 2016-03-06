@@ -557,12 +557,12 @@ public class Crypto {
 		
 		// what should be returned
 		int[] ciphertextCBC = {63, 69, 76, 252, 154, 205, 193, 162,
-							   46, 88, 102, 161, 151, 14, 56, 97};
+                               46, 88, 102, 161, 151, 14, 56, 97};
 		
 		int[] myCiphertextCBC = CBC("I LOVE SECURITY", "ABCDEFGH", "ABCDEFGH");
 		for (int i = 0; i < myCiphertextCBC.length; i++) {
 			if (ciphertextCBC[i] != myCiphertextCBC[i])
-				System.out.println(i + " Expected:" + ciphertextCBC[i] + " Got: " + myCiphertextCBC[i]);
+				System.out.println("Error with CBC at index " + i);
 		}
 				
 	}
